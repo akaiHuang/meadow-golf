@@ -5,16 +5,17 @@ Independent, self-funded research on shared-weight multi-objective training for 
 **Author:** Sheng-Kai Huang ([@akaiHuang](https://github.com/akaiHuang))
 **Status:** Active research, work-in-progress, solo contributor
 **Primary competition repo:** [openai/parameter-golf](https://github.com/openai/parameter-golf)
+**Current Parameter Golf submission:** [openai/parameter-golf#1255](https://github.com/openai/parameter-golf/pull/1255)
 
 **Checkpoints & full logs:** [akaiii/meadow-golf-checkpoints](https://huggingface.co/datasets/akaiii/meadow-golf-checkpoints) · [akaiii/meadow-golf-v4096](https://huggingface.co/datasets/akaiii/meadow-golf-v4096)
 
 ---
 
-## Timeline
+## Research Timeline
 
-- **2026-04-08** — 5L pre-flight CF sweep on MLX (Mac); shared-weight CF concept first validated at tiny scale
-- **2026-04-09** — 6-run matched-compute ablation on 1×H100 (core experiment in this repo): −0.027 BPB at 11L, −0.054 BPB at 5L vs matched causal-only controls
-- **Next** — LoRA retrofit on Qwen 0.8 B (realistic production path — no shipping product trains from scratch at 28 M parameters)
+- **2026-04-08** — 5L pre-flight CF sweep on MLX (Mac); located the **stride=2, rounds=2** sweet spot for the two-pass Coarse-to-Fine decoder and first validated the shared-weight CF concept at tiny scale
+- **2026-04-09** — 6-run matched-compute ablation on 1×H100 (core experiment in this repo); confirmed shared weights beat a matched causal-only control by **−0.027 BPB at 11L d=512** and **−0.054 BPB at 5L d=256**, with the causal-mask integrity explicitly verified by a leakage test
+- **Next** — LoRA retrofit on Qwen 3.5 0.8 B ([Next Step #1](#lora-retrofit-onto-qwen-35-08-b-next-step-1)) — realistic production path, no shipping product trains from scratch at 28 M parameters
 
 ---
 

@@ -1,6 +1,6 @@
 # Non-record: Shared AR + Masked Denoising — −0.027 BPB vs Matched Causal-Only Baseline (11L, 1×H100)
 
-*This folder contains the full reproducible artifacts for the 6-run matched ablation reported in [openai/parameter-golf#1255](https://github.com/openai/parameter-golf/pull/1255).*
+*This folder contains the full reproducible artifacts and submission writeup (v3.3) for the 6-run matched-compute ablation reported in [openai/parameter-golf#1255](https://github.com/openai/parameter-golf/pull/1255).*
 
 **Wishlist RFC addressed:** Text Diffusion (primary), TTT, Depth Recurrence.
 
