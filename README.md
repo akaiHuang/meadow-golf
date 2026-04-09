@@ -43,7 +43,7 @@ Each subdirectory under `experiments/` is a dated milestone with a full README, 
 At both scales, the best shared-weight model evaluated via the 2-pass CF decoder achieves lower BPB than the matched causal-only control trained with the same compute budget. The control's own CF evaluation produces 2.39 BPB (garbage), confirming the effect is attributable to joint training rather than a metric artifact.
 
 **What worked.**
-- Matched-compute control ablation (the first in the text-diffusion cluster, as far as I can tell)
+- Matched-compute control ablation (the text-diffusion PRs I surveyed do not report matched-compute causal-only controls)
 - Causal-mask integrity verified by explicit leakage test (zero divergence at prefix positions under future-token changes)
 - Sign-consistent gain across two scales with the same unified training script
 
@@ -60,17 +60,17 @@ At both scales, the best shared-weight model evaluated via the 2-pass CF decoder
 
 ## Planned next milestones
 
-Ordered by expected commercial impact. Each is a concrete experiment with a stated gating criterion.
+Ordered by expected downstream utility. Each is a concrete experiment with a stated gating criterion.
 
 ### LoRA retrofit onto Qwen 3.5 0.8 B (Next Step #1)
 
 Rather than continuing to train from scratch at 28 M parameters, take a pretrained causal LLM that already generates coherent text and add a small LoRA adapter to expose a bidirectional forward mode, trained with the same joint AR + D3PM objective from the 2026-04-09 ablation. This is the realistic production path — no shipping product trains from scratch at this scale. An initial result fits in roughly 10–15 H100-hours on a single pod.
 
-**Gating criterion:** if Qwen 0.8 B + LoRA retrofit can produce coherent line-level infill under the CF decoder while not degrading causal HumanEval pass@1 by more than 2 points, the shared-weight paradigm has a direct commercial pathway.
+**Gating criterion:** if Qwen 0.8 B + LoRA retrofit can produce coherent line-level infill under the CF decoder while not degrading causal HumanEval pass@1 by more than 2 points, the shared-weight paradigm has a realistic downstream deployment path.
 
 ### Full 8×H100 reproduction of the 11L ablation (Next Step #2)
 
-Run the exact 6-run ablation from 2026-04-09 at 8×H100 production compute (matched to the Parameter Golf 540 s leaderboard budget). The hypothesis is that the 0.027 BPB improvement at 1×H100 persists when scaled, putting the shared-CF 11L result near the current leaderboard midpoint (1.19–1.22 BPB range).
+Run the exact 6-run ablation from 2026-04-09 at 8×H100 production compute (matched to the Parameter Golf 540 s leaderboard budget). The open question is whether the 0.027 BPB improvement at 1×H100 persists, narrows, or inverts when the training-token budget grows by ~8×. I have no confident extrapolation to offer; this is exactly what the experiment is for.
 
 ### Share-ratio grid search and scale sweep
 

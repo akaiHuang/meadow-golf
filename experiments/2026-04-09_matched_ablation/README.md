@@ -126,7 +126,7 @@ Notes on the table:
 - All BPB numbers are measured on the same FineWeb v4096 validation shard with the same sampling protocol (N=500 sequences × seq_len=1024, seed=42). Within each row, Pure-AR and CF are on the same sequences.
 - The "invalid" entry for control rows is informative: it is the result of running the `is_causal=False` pass on a model that was never trained with a bidirectional objective. The bidirectional mode is untrained weights, so it produces a nearly uniform distribution, and CF Total explodes. This **validates** that the CF gain in the shared rows is not a metric artifact — if it were, the control would show the same CF reduction.
 
-### 3.2 The Commercial Claim in Four Rows
+### 3.2 Matched-Compute Summary in Four Rows
 
 | | Pure-AR baseline (causal-only, golf-standard eval) | Best CF result on the same scale | CF wins by |
 |---|---|---|---|
@@ -177,7 +177,7 @@ At 11L the tax is **larger** in absolute terms than at 5L at every weight. This 
 | 5L | 1.4479 | 1.3939 (w=1.0) | **−0.054** |
 | 11L | 1.3574 | 1.3301 (w=0.3) | **−0.027** |
 
-At 5L the best CF configuration is w=1.0 (stronger bidirectional signal); at 11L it is w=0.3 (where the model has enough capacity that a weak bidirectional signal is enough). At both scales the shared-CF configuration beats the matched control — not by a huge margin, but *reproducibly* and with a control that rules out the most obvious metric-artifact explanation.
+At 5L the best CF configuration is w=1.0 (stronger bidirectional signal); at 11L it is w=0.3 (where the model has enough capacity that a weak bidirectional signal is enough). At both scales the shared-CF configuration beats the matched control — not by a huge margin, but *with the same sign at two independent scales* and with a control that rules out the most obvious metric-artifact explanation. Each cell is a single training seed (see §4 and §3.6 for the variance analysis).
 
 ### 3.6 Earlier M1 Max Pre-Flight (3-Seed Statistical Check on an Earlier Checkpoint)
 
@@ -208,34 +208,32 @@ This PR measures a BPB improvement on the standard Parameter Golf metric (cross-
 
 ---
 
-## 5. Why This Matters — Product Angle and Extrapolation
+## 5. Why This Might Matter — Downstream Utility Under Test-Time Compute
 
-The §3.1 result is small (−0.027 BPB at 11L, −0.054 at 5L), but it is the first measurement I have found that separates two factors a production LLM would want to optimize separately:
+The §3.1 result is small (−0.027 BPB at 11L, −0.054 at 5L). What I find interesting is not the magnitude but the factorization: the matched ablation separates two capabilities a production LLM would typically want to optimize independently:
 
-1. **Causal-only generation quality**, which today is how every shipping LLM (ChatGPT, Claude, GPT-4, Codex, Copilot) is primarily measured.
-2. **Bidirectional conditioning** on both left and right context, which today is served either by a *second* specialized model (BERT, MDLM), by a training-time hack (FIM special tokens in Bavarian et al. 2022 / Rozière et al. 2023), or by retrieve-and-rewrite pipelines.
+1. **Causal-only next-token prediction**, which is how every shipping LLM (ChatGPT, Claude, GPT-4, Codex, Copilot) is primarily measured.
+2. **Bidirectional conditioning** on both left and right context, which is today served either by a *second* specialized model (BERT, MDLM), by a training-time hack (FIM special tokens in Bavarian et al. 2022 / Rozière et al. 2023), or by retrieve-and-rewrite pipelines.
 
-The 6-run matched ablation says: **with a single set of weights, at matched compute, a CF-decoder evaluation gets lower BPB than a dedicated causal-only model**. The shared weights are learning something beyond what the causal-only baseline learns, and the CF decoder makes that extra information accessible at evaluation.
+The 6-run matched ablation is consistent with the reading that **a single set of weights, at matched compute, can expose both capabilities when evaluated under the two-pass CF decoder**. This fits naturally into the recent test-time-compute framing (Welleck 2024, speculative decoding, Mask-Predict Ghazvininejad 2019): the CF decoder is an inference-time compute knob that trades extra forward passes for lower BPB, and the shared-weight training makes those extra passes useful instead of noise.
 
-**Why the 0.027 BPB gap matters**: on the Parameter Golf leaderboard, the gaps between adjacent merged records are in the 0.003–0.015 BPB range. A consistent 0.027 BPB improvement at matched compute is leaderboard-relevant, not merely research-curious.
+**Effect-size context (single seed, see §4).** A 0.027 BPB gap on a single A-vs-B pair at 11L is *not* obviously outside the variance of a 540 s training run, and I do not yet have multi-seed error bars at this scale. The 2-scale sign consistency (5L and 11L both favour the shared-CF configuration) is the strongest internal cross-check I currently have. The §6.1 / §6.2 follow-ups are specifically designed to close this variance question.
 
-**Extrapolation to 8×H100 production compute**: the 1×H100 540 s run sees roughly 1/8 the tokens of an 8×H100 540 s run. If the shared-training improvement persists at full production compute (not a guarantee, but the direction and sign have held through every run done so far), a matched-compute version of this method at 8×H100 scale would plausibly land near the current leaderboard midpoint (1.19–1.22 BPB range), with an architecturally-richer model as a byproduct. This is the central hypothesis that Next Step #1 in §6 tests.
-
-**What this is not**: this is not a claim that a 28 M parameter model can generate coherent text, or that 5L/11L models at 540 s training are ready for any production use. Models at this scale cannot generate coherent English regardless of architecture (GPT-2 small at 124 M parameters / 10 B tokens is the rough coherence threshold, and these models are 5× smaller and 30× less trained). The Parameter Golf competition accepts this — BPB is the metric precisely because coherence is out of reach at these scales. The claim here is scoped to BPB.
+**What this is not.** This is not a claim that a 28 M parameter model can generate coherent text, or that these 540 s runs are ready for any production use. Models at this scale cannot generate coherent English regardless of architecture (GPT-2 small at 124 M / 10 B tokens is the rough coherence threshold, and these models are 5× smaller and 30× less trained). The Parameter Golf competition accepts this — BPB is the metric precisely because coherence is out of reach at these scales. The claim here is scoped to BPB under a specific decoder with a specific control, nothing more.
 
 ---
 
 ## 6. What Might Work With More Compute
 
-Honest speculation. Each item below is a concrete experiment that would extend or close an open question from §3 — ordered by expected impact on the commercial hypothesis in §5.
+Honest speculation. Each item below is a concrete experiment that would extend or close an open question from §3 — ordered by expected impact on the downstream-utility framing in §5.
 
 ### 6.1 Retrofit onto a pretrained causal LLM via LoRA (the production path)
 
-The experiment that would most directly determine whether this paradigm has a commercial pathway is a **LoRA-style retrofit of a pretrained causal LLM** (e.g. Qwen 3.5 0.8 B, which I already have locally). Rather than training from scratch at 28 M parameters, take a model that already generates coherent text and add a small LoRA adapter to expose a bidirectional forward mode, trained with the same joint AR + D3PM objective. This is the path every shipping product takes — nobody trains production models from scratch. An initial result on Qwen 0.8 B fits in roughly 10–15 H100-hours and would tell, *within one pod session*, whether the shared-weight + CF-decoder pattern carries to a model that is actually coherent at inference. This is the single most compute-efficient commercial test and it is Next Step #1.
+The experiment that would most directly test whether this paradigm survives outside the Parameter Golf toy regime is a **LoRA-style retrofit of a pretrained causal LLM** (e.g. Qwen 3.5 0.8 B, which I already have locally). Rather than training from scratch at 28 M parameters, take a model that already generates coherent text and add a small LoRA adapter to expose a bidirectional forward mode, trained with the same joint AR + D3PM objective. No shipping LLM trains from scratch at 28 M parameters, so this is the setting where any downstream claim has to be tested. An initial result on Qwen 0.8 B fits in roughly 10–15 H100-hours and would tell, *within one pod session*, whether the shared-weight + CF-decoder pattern carries to a model that is actually coherent at inference. This is the single most compute-efficient downstream test and it is Next Step #1.
 
 ### 6.2 Full-budget 8×H100 reproduction of the 11L ablation
 
-Run the exact §3.1 ablation at 8×H100 540 s (the production Parameter Golf budget) to confirm the 0.027 BPB improvement persists when scaled. If the sign and magnitude hold, the shared-CF 11L run at 8×H100 should land near the current leaderboard midpoint (1.19–1.22 range) and would become the first matched-control BPB improvement reported in the text-diffusion cluster. This is Next Step #2.
+Run the exact §3.1 ablation at 8×H100 540 s (the production Parameter Golf budget) to test whether the 0.027 BPB improvement persists, narrows, or inverts when the training-token budget grows ~8×. I do not have a confident extrapolation to offer — the Pure-AR tax in §3.5 already grows with scale in a direction that works against the shared model, and this experiment is how I find out whether that trend continues or reverses at full compute. This is Next Step #2.
 
 ### 6.3 Share-ratio grid search at 11L
 
@@ -255,7 +253,7 @@ I used uniform-noise D3PM (random vocabulary replacement). The MDLM cluster (#82
 
 > **Scope note.** The runs in this section are a **different training line** from the Shared AR + Denoising model used in §3. They are a 1×H100 A/B sweep of retrodiction modes on a pure AR stack (no CDM auxiliary loss). The "Pure AR" numbers in this table are therefore *not comparable* to the "Pure AR" column of §3.3, which measures the Shared AR + Denoising checkpoint in single-mode causal. Different models, different training configurations. See §7.3 for an explicit side-by-side.
 
-This submission also documents a line of work I call **retrodiction** — a reversed-sequence auxiliary loss added to the standard causal AR loss, motivated qualitatively by the Petz recovery map from quantum information. The operational definition is simply:
+This submission also documents a line of work I call **retrodiction** — a reversed-sequence auxiliary loss added to the standard causal AR loss. The operational definition is simply:
 
 ```python
 loss = causal_lm_loss(model(x), x) + α · causal_lm_loss(model(x.flip(1)), x.flip(1))
@@ -293,9 +291,9 @@ The two training lines in this PR each produce their own 11L Pure-AR BPB, and th
 | §7.2 Test D | Pure AR only | off | 1×H100, 540 s | 1.3401 |
 | §7.2 Test C | Pure AR only | partial 15% | 1×H100, 540 s | 1.3594 |
 
-The §3.1 11L_w0 (1.3574) and §7.2 Test D (1.3401) are both pure-AR, single-seed, 1×H100 540 s runs at the same 11L d=512 v4096 architecture — the small gap between them reflects a difference in training stack details (XSA layer count, BigramHash configuration) that existed before I unified the §3.1 script. For the commercial claim, the relevant comparison is always 11L_w0 vs 11L_w0.3 CF (both measured with the *exact* same script, same data pipeline, same eval sampling). The §7 retrodiction sweep is a separate line of work included for completeness.
+The §3.1 11L_w0 (1.3574) and §7.2 Test D (1.3401) are both pure-AR, single-seed, 1×H100 540 s runs at the same 11L d=512 v4096 architecture — the small gap between them reflects a difference in training stack details (XSA layer count, BigramHash configuration) that existed before I unified the §3.1 script. For the primary claim of this submission, the relevant comparison is always 11L_w0 vs 11L_w0.3 CF (both measured with the *exact* same script, same data pipeline, same eval sampling). The §7 retrodiction sweep is a separate line of work included for completeness.
 
-**Interpretation (hypothesis).** At 5L on short budgets, the forward loss signal may be weak enough that the reversed loss provides complementary gradient. At 11L on production budgets, I hypothesize that the forward signal is strong enough to dominate and the reversed loss competes for updates rather than augmenting them. The Petz-recovery motivation predicts asymptotic regularization; in the parameter-golf regime the training budget does not reach the asymptotic limit. I do not have a mechanistic proof of this interpretation.
+**Interpretation (hypothesis).** At 5L on short budgets, the forward loss signal may be weak enough that the reversed loss provides complementary gradient. At 11L on production budgets, I hypothesize that the forward signal is strong enough to dominate and the reversed loss competes for updates rather than augmenting them. I do not have a mechanistic proof of this interpretation, and I have not found a useful parametrization of retrodiction for the parameter-golf regime.
 
 **Practical recommendation:** retrodiction is a tax on the production stack and should not be used. The matched-compute 6-run ablation in §3.1 was run *without* retrodiction for this reason.
 
