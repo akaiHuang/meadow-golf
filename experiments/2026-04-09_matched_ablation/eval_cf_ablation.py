@@ -80,13 +80,21 @@ def main():
     # Instantiate and load state dict
     model = GPTv2().to(device)
     log(f"  loading state dict from {args.ckpt}")
-    sd = torch.load(args.ckpt, map_location=device, weights_only=False)
-    # The checkpoint might be wrapped
-    if isinstance(sd, dict):
-        for k in ("model", "state_dict", "raw_model"):
-            if k in sd and isinstance(sd[k], dict):
-                sd = sd[k]
-                break
+    if args.ckpt.endswith(".npz"):
+        # Final-state save written by train_cdm.py at end of training (np.savez of
+        # raw_model.state_dict(), with bf16 weights expanded to float32). Load each
+        # array as a torch tensor; load_state_dict(strict=False) will cast back.
+        log("  detected .npz final-state checkpoint")
+        npz = np.load(args.ckpt)
+        sd = {k: torch.from_numpy(np.array(npz[k])) for k in npz.files}
+    else:
+        sd = torch.load(args.ckpt, map_location=device, weights_only=False)
+        # The checkpoint might be wrapped
+        if isinstance(sd, dict):
+            for k in ("model", "state_dict", "raw_model"):
+                if k in sd and isinstance(sd[k], dict):
+                    sd = sd[k]
+                    break
     # Strip common DDP / compile prefixes
     clean = {}
     for k, v in sd.items():
@@ -94,6 +102,13 @@ def main():
         if k2.startswith("module."): k2 = k2[7:]
         if k2.startswith("_orig_mod."): k2 = k2[10:]
         clean[k2] = v
+    # Cast each tensor to match the model parameter dtype, so loading float32
+    # weights from .npz into a bf16 model works without silent precision loss.
+    model_dtypes = {n: p.dtype for n, p in model.named_parameters()}
+    model_dtypes.update({n: b.dtype for n, b in model.named_buffers()})
+    for k in list(clean.keys()):
+        if k in model_dtypes and clean[k].dtype != model_dtypes[k]:
+            clean[k] = clean[k].to(model_dtypes[k])
     missing, unexpected = model.load_state_dict(clean, strict=False)
     log(f"  loaded {len(clean)} keys, missing={len(missing)}, unexpected={len(unexpected)}")
     if len(missing) > 10:

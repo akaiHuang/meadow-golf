@@ -1044,6 +1044,21 @@ def main():
 
     # ---- Save final model ----
     if is_main():
+        # Always save a final-step .pt checkpoint so CF eval is not stuck on the
+        # last val_every-aligned save (which can be hundreds of steps before the
+        # actual end-of-training state). This addresses the intermediate-checkpoint
+        # bias caught in the v3.3 review of the 6-run ablation.
+        if args.checkpoint_dir:
+            os.makedirs(args.checkpoint_dir, exist_ok=True)
+            final_ckpt_path = os.path.join(args.checkpoint_dir, f"step_final.pt")
+            final_ckpt = {
+                "step": step,
+                "model": raw_model.state_dict(),
+                "ema": ema_state.shadow if ema_state else None,
+            }
+            torch.save(final_ckpt, final_ckpt_path)
+            print_main(f"  Final checkpoint saved: {final_ckpt_path} (step={step})")
+
         # Save as npz
         sd = raw_model.state_dict()
         np_weights = {}
