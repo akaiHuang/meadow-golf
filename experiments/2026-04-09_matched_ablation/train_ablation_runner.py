@@ -40,6 +40,9 @@ def main():
     ap.add_argument("--xsa_last_n", type=int, required=True)
     ap.add_argument("--cdm_weight", type=float, required=True,
                     help="Weight on the denoising loss. 0 = disable CDM (causal-only control).")
+    ap.add_argument("--seed", type=int, default=None,
+                    help="Override module-level SEED constant in train_cdm.py "
+                         "(default: leave the script's baked-in seed, 1337, unchanged).")
 
     # Split on -- to separate runner args from passthrough args
     if "--" in sys.argv:
@@ -68,6 +71,8 @@ def main():
     src = patch(src, "MODEL_DIM", args.model_dim)
     src = patch(src, "BIGRAM_DIM", args.bigram_dim)
     src = patch(src, "XSA_LAST_N", args.xsa_last_n)
+    if args.seed is not None:
+        src = patch(src, "SEED", args.seed)
 
     # --- Patch the CDM loss weight inline ---
     # Original line (around line 1023):
@@ -118,7 +123,8 @@ def main():
         src = src[:i0] + new_block + src[i1:]
 
     # --- Write patched source to a temp file for reproducibility ---
-    out_script = f"/tmp/train_cdm_patched_{args.num_layers}L_w{args.cdm_weight}.py"
+    seed_suffix = f"_s{args.seed}" if args.seed is not None else ""
+    out_script = f"/tmp/train_cdm_patched_{args.num_layers}L_w{args.cdm_weight}{seed_suffix}.py"
     with open(out_script, "w") as f:
         f.write(src)
     print(f"[ablation runner] patched script written to {out_script}")
