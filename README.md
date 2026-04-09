@@ -14,7 +14,7 @@ Independent, self-funded research on shared-weight multi-objective training for 
 ## Research Timeline
 
 - **2026-04-08** — 5L pre-flight CF sweep on MLX (Mac); located the **stride=2, rounds=2** sweet spot for the two-pass Coarse-to-Fine decoder and first validated the shared-weight CF concept at tiny scale
-- **2026-04-09** — 6-run matched-compute ablation on 1×H100 (core experiment in this repo); confirmed shared weights beat a matched causal-only control by **−0.027 BPB at 11L d=512** and **−0.054 BPB at 5L d=256**, with the causal-mask integrity explicitly verified by a leakage test
+- **2026-04-09** — 6-run matched-compute ablation + 5-seed final-checkpoint verification on 1×H100 (core experiment in this repo); final 11L headline is now **−0.0205 ± 0.005 BPB** (5-seed mean shared CF vs matched causal-only control at the true final checkpoint), with the earlier 6-run sweep retained as cross-scale evidence and the causal-mask integrity explicitly verified by a leakage test
 - **Next** — LoRA retrofit on Qwen 3.5 0.8 B ([Next Step #1](#lora-retrofit-onto-qwen-35-08-b-next-step-1)) — realistic production path, no shipping product trains from scratch at 28 M parameters
 
 ---
@@ -29,21 +29,30 @@ Each subdirectory under `experiments/` is a dated milestone with a full README, 
 
 ## Research diary
 
-### 2026-04-09 — 6-run matched-compute ablation ([experiments/2026-04-09_matched_ablation/](experiments/2026-04-09_matched_ablation/))
+### 2026-04-09 — 6-run matched-compute ablation + 5-seed verification ([experiments/2026-04-09_matched_ablation/](experiments/2026-04-09_matched_ablation/))
 
-**Milestone summary.** Trained 6 models in one 1×H100 SXM pod session (total compute cost $3.93): 5L d=256 and 11L d=512, each with CDM loss weight ∈ {0.0, 0.3, 1.0}. The w=0 runs are the matched causal-only controls that the earlier submission lacked. Evaluated all 6 under the Coarse-to-Fine (CF) two-pass decoder protocol (stride=2, rounds=2, n_random=3).
+**Milestone summary.** Ran the original 6-model 1×H100 matched-compute ablation ($3.93 total) and then added a second 1×H100 pod ($3.50) for 11L final-checkpoint multi-seed verification. The original sweep trains 5L d=256 and 11L d=512 at CDM loss weight ∈ {0.0, 0.3, 1.0}; the follow-up reruns 11L with 5 fresh shared-model seeds and 1 fresh control seed, all evaluated under the Coarse-to-Fine (CF) two-pass decoder protocol (stride=2, rounds=2, n_random=3, eval seed 42).
 
-**Headline result.**
+**Current headline result (v3.5).**
+
+| Scale | Control Pure-AR | Shared CF | Advantage |
+|---|---|---|---|
+| 11L d=512 | 1.3214 (1 fresh control seed, final ckpt) | 1.3009 ± 0.005 (5-seed mean, final ckpt) | **−0.0205 BPB** |
+
+The post-hoc best shared seed reaches 1.2924, i.e. **−0.0290 BPB** relative to the same control, but that is kept as a deployable-artifact reference rather than the effect-size headline.
+
+**Original 6-run sweep (retained as cross-scale evidence).**
 
 | Scale | Control Pure-AR (w=0) | Best shared CF | CF advantage |
 |---|---|---|---|
 | 5L d=256 | 1.4479 | 1.3939 (w=1.0) | **−0.054 BPB** |
 | 11L d=512 | 1.3574 | 1.3301 (w=0.3) | **−0.027 BPB** |
 
-At both scales, the best shared-weight model evaluated via the 2-pass CF decoder achieves lower BPB than the matched causal-only control trained with the same compute budget. The control's own CF evaluation produces 2.39 BPB (garbage), confirming the effect is attributable to joint training rather than a metric artifact.
+At both scales, the best shared-weight model evaluated via the 2-pass CF decoder achieves lower BPB than the matched causal-only control trained with the same compute budget. The control's own CF evaluation produces garbage (~2.45 BPB at the 11L final checkpoint), confirming the effect is attributable to joint training rather than a metric artifact.
 
 **What worked.**
 - Matched-compute control ablation (the text-diffusion PRs I surveyed do not report matched-compute causal-only controls)
+- Final-checkpoint methodology fix plus 5-seed verification at 11L, which reduced the visible seed-to-seed CF variance enough to replace the old single-seed headline
 - Causal-mask integrity verified by explicit leakage test (zero divergence at prefix positions under future-token changes)
 - Sign-consistent gain across two scales with the same unified training script
 
@@ -53,6 +62,7 @@ At both scales, the best shared-weight model evaluated via the 2-pass CF decoder
 
 **Full writeup:** [experiments/2026-04-09_matched_ablation/README.md](experiments/2026-04-09_matched_ablation/README.md)
 **Raw logs:** [experiments/2026-04-09_matched_ablation/ablation_logs/](experiments/2026-04-09_matched_ablation/ablation_logs/) (6 training logs + 6 CF eval logs + 1 generation test log)
+**Reviewer spot-check bundle:** `experiments/2026-04-09_matched_ablation/seeds_run/` in the PR mirror; exact large state files stay off-repo
 **Reproducible scripts:** [experiments/2026-04-09_matched_ablation/](experiments/2026-04-09_matched_ablation/) (`train_ablation_runner.py`, `eval_cf_ablation.py`, `run_6.sh`, `eval_6.sh`, `leakage_test.py`, `gen_test.py`)
 **Checkpoints:** 6 .npz files on [akaiii/meadow-golf-checkpoints](https://huggingface.co/datasets/akaiii/meadow-golf-checkpoints)
 
@@ -91,7 +101,7 @@ meadow-golf/
 ├── .gitignore
 ├── experiments/
 │   └── 2026-04-09_matched_ablation/             ← 6-run matched-compute ablation
-│       ├── README.md                            ← full submission writeup (v3.3)
+│       ├── README.md                            ← full submission writeup (v3.5)
 │       ├── submission.json                      ← parameter-golf submission metadata
 │       ├── bpe_v4096.model                      ← v4096 BPE tokenizer
 │       ├── train_cdm.py                         ← base joint AR + D3PM training script
@@ -118,21 +128,28 @@ See [experiments/2026-04-09_matched_ablation/README.md §9](experiments/2026-04-
 ```bash
 pip install torch numpy sentencepiece huggingface_hub
 
-hf download akaiii/meadow-golf-checkpoints --repo-type dataset --local-dir ./gcp
-hf download akaiii/meadow-golf-v4096       --repo-type dataset --local-dir ./gv4096
+hf download akaiii/meadow-golf-v4096 --repo-type dataset --local-dir ./gv4096
 
 cd experiments/2026-04-09_matched_ablation
+
+# Original 6-run sweep
 SCRIPT_DIR=. DATA_DIR=../../gv4096/data TOKENIZER=../../gv4096/bpe_v4096.model bash run_6.sh
 SCRIPT_DIR=. DATA_DIR=../../gv4096/data TOKENIZER=../../gv4096/bpe_v4096.model bash eval_6.sh
+
+# 11L v3.5 headline verification
+SCRIPT_DIR=. DATA_DIR=../../gv4096/data TOKENIZER=../../gv4096/bpe_v4096.model \
+OUT_DIR=/workspace/out CKPT_DIR=/workspace/ckpt LOG_DIR=/workspace/logs \
+bash run_p5.sh
+bash run_phase_b.sh
 ```
 
-Total wall time ≈ 90 minutes on a 1×H100 SXM. Total compute cost for the run reported in this repo: $3.93.
+Total wall time ≈ 90 minutes for the original 6-run sweep, plus ≈70 minutes for the 11L 5-seed verification. Total self-funded compute reflected in the current v3.5 writeup: **$7.43**.
 
 ---
 
 ## Relationship to the Parameter Golf submission
 
-The full submission for the 2026-04-09 milestone will be filed as a non-record update to [openai/parameter-golf PR #1255](https://github.com/openai/parameter-golf/pull/1255). That PR's `README.md` is identical to [experiments/2026-04-09_matched_ablation/README.md](experiments/2026-04-09_matched_ablation/README.md) in this repo. This repo serves as the permanent home for the research line and as the diary of intermediate versions and future experiments.
+The full submission for the 2026-04-09 milestone is being maintained as a non-record update to [openai/parameter-golf PR #1255](https://github.com/openai/parameter-golf/pull/1255). The experiment README in this repo is the current canonical writeup for that line. This repo serves as the permanent home for the research line and as the diary of intermediate versions and future experiments.
 
 ---
 
