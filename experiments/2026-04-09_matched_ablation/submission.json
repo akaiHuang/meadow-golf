@@ -1,0 +1,67 @@
+{
+  "track": "non_record_16mb",
+  "date": "2026-04-09",
+  "name": "Shared AR + Masked Denoising Beats Matched Causal Baseline — CF BPB 1.3301 (11L, 1xH100)",
+  "author": "Sheng-Kai Huang",
+  "github_id": "akaiHuang",
+  "email": "akai@fawstudio.com",
+  "primary_claim": "A shared-weight joint causal-AR + uniform-noise D3PM denoising model, evaluated via a two-pass Coarse-to-Fine decoder, achieves lower BPB than a matched causal-only baseline at matched compute. Validated across 5L and 11L in a single 1xH100 pod session.",
+  "headline_numbers": {
+    "11L_shared_w0.3_CF_BPB": 1.3301,
+    "11L_causal_only_control_Pure_AR_BPB": 1.3574,
+    "11L_CF_advantage_over_control": -0.027,
+    "5L_shared_w1.0_CF_BPB": 1.3939,
+    "5L_causal_only_control_Pure_AR_BPB": 1.4479,
+    "5L_CF_advantage_over_control": -0.054
+  },
+  "ablation_runs": [
+    {"tag": "5L_w0", "layers": 5, "dim": 256, "vocab": 4096, "cdm_weight": 0.0, "pure_ar_bpb": 1.4479, "cf_total_bpb": 2.4371, "cf_valid": false},
+    {"tag": "5L_w03", "layers": 5, "dim": 256, "vocab": 4096, "cdm_weight": 0.3, "pure_ar_bpb": 1.5231, "cf_total_bpb": 1.4009, "cf_valid": true},
+    {"tag": "5L_w1", "layers": 5, "dim": 256, "vocab": 4096, "cdm_weight": 1.0, "pure_ar_bpb": 1.5841, "cf_total_bpb": 1.3939, "cf_valid": true},
+    {"tag": "11L_w0", "layers": 11, "dim": 512, "vocab": 4096, "cdm_weight": 0.0, "pure_ar_bpb": 1.3574, "cf_total_bpb": 2.3947, "cf_valid": false},
+    {"tag": "11L_w03", "layers": 11, "dim": 512, "vocab": 4096, "cdm_weight": 0.3, "pure_ar_bpb": 1.4708, "cf_total_bpb": 1.3301, "cf_valid": true},
+    {"tag": "11L_w1", "layers": 11, "dim": 512, "vocab": 4096, "cdm_weight": 1.0, "pure_ar_bpb": 1.5414, "cf_total_bpb": 1.3527, "cf_valid": true}
+  ],
+  "hardware": "1xH100 SXM (US-MO-1), self-funded",
+  "total_compute_cost_usd": 3.93,
+  "training_budget_per_run_secs": 540,
+  "eval_protocol": "CF 2-pass decoder, N=500 sequences x seq_len=1024, stride=2, rounds=2, n_random=3, seed=42",
+  "tokenizer": "v4096 BPE (akaiii/meadow-golf-v4096/bpe_v4096.model)",
+  "val_data": "FineWeb v4096 retokenized validation shard (akaiii/meadow-golf-v4096/data/fineweb_val_000000.bin)",
+  "techniques": [
+    "Joint AR + D3PM-uniform masked denoising on shared weights (no separate heads)",
+    "Two-pass Coarse-to-Fine decoder: causal pass scores skeleton positions, bidirectional pass fills gaps",
+    "Matched causal-only control ablation (the first such control in the text-diffusion cluster)",
+    "Cross-scale verification (5L d=256 and 11L d=512) at matched compute",
+    "Causal-mask integrity verified by explicit leakage test (leakage_test.py)"
+  ],
+  "artifacts_hf": {
+    "checkpoints_repo": "akaiii/meadow-golf-checkpoints",
+    "data_repo": "akaiii/meadow-golf-v4096",
+    "checkpoint_files": [
+      "5L_w0.npz", "5L_w03.npz", "5L_w1.npz",
+      "11L_w0.npz", "11L_w03.npz", "11L_w1.npz"
+    ]
+  },
+  "included_scripts": [
+    "train_cdm.py",
+    "train_ablation_runner.py",
+    "eval_cf_dualbrain.py",
+    "eval_cf_dualbrain_cuda.py",
+    "eval_cf_ablation.py",
+    "leakage_test.py",
+    "run_6.sh",
+    "eval_6.sh",
+    "gen_test.py"
+  ],
+  "included_logs_dir": "ablation_logs/",
+  "wishlist_items_addressed": ["Text diffusion"],
+  "prior_art_cited": [
+    "UniLM (Dong et al. 2019)",
+    "GLM (Du et al. 2022)",
+    "FIM / Fill-in-the-Middle (Bavarian et al. 2022, OpenAI)",
+    "D3PM (Austin et al. 2021)",
+    "Mask-Predict (Ghazvininejad et al. 2019)",
+    "MDLM (Sahoo et al. 2024)"
+  ]
+}
