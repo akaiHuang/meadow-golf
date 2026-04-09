@@ -5,7 +5,16 @@ Independent, self-funded research on shared-weight multi-objective training for 
 **Author:** Sheng-Kai Huang ([@akaiHuang](https://github.com/akaiHuang))
 **Status:** Active research, work-in-progress, solo contributor
 **Primary competition repo:** [openai/parameter-golf](https://github.com/openai/parameter-golf)
-**Hugging Face artifacts:** [akaiii/meadow-golf-checkpoints](https://huggingface.co/datasets/akaiii/meadow-golf-checkpoints) · [akaiii/meadow-golf-v4096](https://huggingface.co/datasets/akaiii/meadow-golf-v4096)
+
+**Checkpoints & full logs:** [akaiii/meadow-golf-checkpoints](https://huggingface.co/datasets/akaiii/meadow-golf-checkpoints) · [akaiii/meadow-golf-v4096](https://huggingface.co/datasets/akaiii/meadow-golf-v4096)
+
+---
+
+## Timeline
+
+- **2026-04-08** — 5L pre-flight CF sweep on MLX (Mac); shared-weight CF concept first validated at tiny scale
+- **2026-04-09** — 6-run matched-compute ablation on 1×H100 (core experiment in this repo): −0.027 BPB at 11L, −0.054 BPB at 5L vs matched causal-only controls
+- **Next** — LoRA retrofit on Qwen 0.8 B (realistic production path — no shipping product trains from scratch at 28 M parameters)
 
 ---
 
@@ -77,6 +86,7 @@ All 2026-04-09 runs used D3PM-uniform noise (random vocabulary replacement). The
 ```
 meadow-golf/
 ├── README.md                                    ← this diary (you are here)
+├── CHANGELOG.md                                 ← one-paragraph-per-experiment log
 ├── .gitignore
 ├── experiments/
 │   └── 2026-04-09_matched_ablation/             ← 6-run matched-compute ablation
